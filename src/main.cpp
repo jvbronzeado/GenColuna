@@ -1,13 +1,15 @@
+#include <chrono>
 #include <stdio.h>
 #include <gurobi_c++.h>
-
-#include "leitor.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <filesystem>
+
+#include "leitor.h"
+#include "colunas.h"
 
 std::vector<std::string> cmd_tokens;
 bool cmd_exists(const std::string& option)
@@ -25,10 +27,6 @@ void display_help_message()
 using namespace std;
 
 int main(int argc, char** argv) {
-    printf("Vem dançar forró, vem\n");
-    printf("Vem dançar forró, vem\n");
-    printf("Vem dançar forró deixa os problemas pra depois\n");
-
     // get string tokens
     for(int i = 0; i < argc; i++)
     {
@@ -67,56 +65,55 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // leitor teste
-    Leitor leitor(inputs[0]);
-    if(!leitor.isLoaded()) {
-        return -1;
+    // setup result header
+    int name_width = 0;
+    int time_width = 15;
+    int cost_width = 15; 
+    for(std::string& path : inputs)
+    {
+        name_width = std::max(name_width, (int)path.size());
     }
 
-    std::cout << "max price: " << leitor.getMax() << '\n';
-    std::cout << "item count: " << leitor.size() << '\n';
-    for(int i = 0; i < leitor.size(); i++) {
-        std::cout << "item["  << i << "]: " << leitor.get(i) << '\n';
+    name_width += 2;
+
+    // print header
+    std::cout << std::left << std::setw(name_width) << "instances"
+              << std::setw(time_width) << "time (s)"
+              << std::setw(cost_width) << "cost" << std::endl;
+
+    // print separator
+    std::cout << std::setfill('-') << std::setw(name_width + time_width + cost_width) << "" << std::endl;
+    std::cout << std::setfill(' '); // Reset fill character
+
+    for(const std::string& path : inputs) {    
+        try {       
+            Leitor leitor(path);
+            if(!leitor.isLoaded()) {
+                std::cerr << "failed to load instance: " << path << std::endl;
+                continue;
+            }
+
+            auto start = std::chrono::high_resolution_clock::now();
+            Colunas c(leitor);
+            c.Solve();
+
+            double cost = c.getBest();
+
+            auto end = std::chrono::high_resolution_clock::now();
+
+            // Calculate the duration
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            double t = duration.count()/1000000.0;
+
+            std::cout << std::left << std::setw(name_width) << path
+                      << std::setw(time_width) << std::setprecision(6) << t
+                      << std::setw(cost_width) << cost << std::endl; 
+        } catch(GRBException e) {
+            cout << "Error code = " << e.getErrorCode() << endl;
+            cout << e.getMessage() << endl;
+        } catch(...) {
+            cout << "Exception during optimization" << endl;
+        }
     }
-
-    try {
-        // Formulate and solve model
-        
-        // Create an environment
-        GRBEnv env = GRBEnv(true);
-        env.set("LogFile", "mip1.log");
-        env.start();
-
-        GRBModel model = GRBModel(env);
-
-        // Create variables
-        GRBVar x = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x");
-        GRBVar y = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "y");
-        GRBVar z = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "z");
-
-        // Add constraint: x + 2 y + 3 z <= 4
-        model.addConstr(x + 2 * y + 3 * z <= 4, "c0");
-
-        // Set objective: maximize x + y + 2 z
-        model.setObjective(x + y + 2 * z, GRB_MAXIMIZE);
-
-        // Optimize model
-        model.optimize();
-
-        cout << x.get(GRB_StringAttr_VarName) << " "
-             << x.get(GRB_DoubleAttr_X) << endl;
-        cout << y.get(GRB_StringAttr_VarName) << " "
-             << y.get(GRB_DoubleAttr_X) << endl;
-        cout << z.get(GRB_StringAttr_VarName) << " "
-             << z.get(GRB_DoubleAttr_X) << endl;
-
-        cout << "Obj: " << model.get(GRB_DoubleAttr_ObjVal) << endl;
-    } catch(GRBException e) {
-        cout << "Error code = " << e.getErrorCode() << endl;
-        cout << e.getMessage() << endl;
-    } catch(...) {
-        cout << "Exception during optimization" << endl;
-    }
-    
     return 0;
 }
