@@ -30,18 +30,22 @@ bool Colunas::Solve() {
         this->SolveProblem();
 
         // pega o dual
-        int numConstrs = this->m_model->get(GRB_IntAttr_NumConstrs);
+        uint32_t numConstrs = this->m_model->get(GRB_IntAttr_NumConstrs);
+
         GRBConstr* allConstrs = this->m_model->getConstrs();
         std::vector<double> dual(numConstrs);
 
         for (uint32_t i = 0; i < numConstrs; ++i) {
             dual[i] = allConstrs[i].get(GRB_DoubleAttr_Pi);
+        }
+
+        for (uint32_t i = 0; i < numConstrs; ++i) {
             this->m_model->remove(allConstrs[i]); // remove a constraint antigas
         }
 
         // resolve o subproblem
         SubproblemResult result = this->SolveSubproblem(dual);
-
+        
         // se não for valido sai do loop
         if(result.cost >= 0.0) {
             break;
@@ -52,7 +56,7 @@ bool Colunas::Solve() {
         GRBVar& var = this->variables.back();
 
         for(uint32_t i = 0; i < size; i++) {
-            if(result.results[i] >= 0.0000000001) {
+            if(result.results[i] >= 1e-6) {
                 this->expressions[i] += var;
             }
         }
@@ -63,9 +67,6 @@ bool Colunas::Solve() {
 }
 
 void Colunas::SolveProblem() {    
-    this->m_model->reset();
-    this->m_model->update();
-    
     for(uint32_t i = 0; i < this->expressions.size(); i++) {
         this->m_model->addConstr(this->expressions[i] == 1);
     }
@@ -77,25 +78,29 @@ void Colunas::SolveProblem() {
     
     this->m_model->setObjective(objective, GRB_MINIMIZE);
 
-    // Optimize model
     this->m_model->optimize();
 }
 
 SubproblemResult Colunas::SolveSubproblem(const std::vector<double>& dual) {
+    const uint32_t size = this->m_leitor.size();
+    
     GRBModel sub_model(this->m_env);
 
     GRBLinExpr weight_sum = 0;
     GRBLinExpr objective_sum = 0;
 
-    std::vector<GRBVar> vars(this->m_leitor.size());
-    for(uint32_t i = 0; i < this->m_leitor.size(); i++) {
-        vars[i] = sub_model.addVar(0.0, 1.0, 0.0, GRB_CONTINUOUS);
+    std::vector<GRBVar> vars;
+    vars.reserve(size);
+    for(uint32_t i = 0; i < size; i++) {
+        vars.push_back(sub_model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+    }
+
+    for(uint32_t i = 0; i < size; i++) {
         weight_sum += this->m_leitor.get(i) * vars[i];
         objective_sum += dual[i] * vars[i];
     }
 
     sub_model.addConstr(weight_sum <= this->m_leitor.getMax());
-
     sub_model.setObjective(1.0 - objective_sum, GRB_MINIMIZE);
 
     sub_model.optimize();
