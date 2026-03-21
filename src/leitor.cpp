@@ -1,4 +1,5 @@
 #include "leitor.h"
+#include "combo.h"
 
 #include <iostream>
 #include <fstream>

@@ -1,4 +1,4 @@
-project('GenColunas', 'cpp')
+project('GenColunas', ['c', 'cpp'])
 
 cc = meson.get_compiler('cpp')
 

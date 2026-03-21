@@ -20,6 +20,7 @@ public:
 private:
     void SolveProblem();
     SubproblemResult SolveSubproblem(const std::vector<double>& dual);
+    SubproblemResult SolveSubproblemPD(const std::vector<double>& dual);
     
     bool m_solved = false;
 

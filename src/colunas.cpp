@@ -1,4 +1,5 @@
 #include "colunas.h"
+#include "src/combo.h"
 
 Colunas::Colunas(Leitor& leitor)
     : m_leitor(leitor) {
@@ -44,7 +45,7 @@ bool Colunas::Solve() {
         }
 
         // resolve o subproblem
-        SubproblemResult result = this->SolveSubproblem(dual);
+        SubproblemResult result = this->SolveSubproblemPD(dual);
         
         // se não for valido sai do loop
         if(result.cost >= 0.0) {
@@ -113,6 +114,42 @@ SubproblemResult Colunas::SolveSubproblem(const std::vector<double>& dual) {
     return {
         .results = results,
         .cost = sub_model.get(GRB_DoubleAttr_ObjVal)
+    };
+}
+
+/*
+typedef struct {
+  itype   p;              //profit           
+  itype   w;              //weight           
+  boolean x;              //solution variable
+    int index;
+} item;
+*/
+SubproblemResult Colunas::SolveSubproblemPD(const std::vector<double>& dual) {
+    const uint32_t size = this->m_leitor.size();
+    const double scale = 100000.0;
+    
+    item* itens = new item[size];
+    
+    for(int i = 0; i < size; i++) {
+        itens[i].p = (long)(dual[i] * scale);
+        itens[i].w = this->m_leitor.get(i);
+        itens[i].x = false;
+        itens[i].index = i;
+    }
+
+    long value = combo(&itens[0], &itens[size-1], this->m_leitor.getMax(), 0, 1e6, true, false);
+    
+    std::vector<double> results(size);
+    for(int i = 0; i < size; i++) {
+        results[itens[i].index] = (itens[i].x ? 1.0 : 0.0);
+    }
+
+    delete[] itens;
+    
+    return {
+        .results = results,
+        .cost = 1.0 - value/scale
     };
 }
 
