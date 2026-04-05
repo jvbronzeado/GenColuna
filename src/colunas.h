@@ -30,7 +30,7 @@ private:
 
     std::unique_ptr<GRBModel> m_model;
 
-    std::vector<GRBLinExpr> expressions;
+    std::vector<GRBConstr> expressions;
     std::vector<GRBVar> variables;
 public:
     double getBest();

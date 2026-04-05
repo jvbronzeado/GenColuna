@@ -1,5 +1,6 @@
 #include "colunas.h"
 #include "src/combo.h"
+#include <cstddef>
 
 Colunas::Colunas(Leitor& leitor)
     : m_leitor(leitor) {
@@ -23,7 +24,7 @@ bool Colunas::Solve() {
     this->expressions.resize(size);
     for(uint32_t i = 0; i < size; i++) {
         this->variables[i] = this->m_model->addVar(0.0, 1.0, 0.0, GRB_CONTINUOUS);
-        this->expressions[i] = this->variables[i];
+        this->expressions[i] = this->m_model->addConstr(this->variables[i] == 1);
     }
 
     while(true) {
@@ -39,28 +40,24 @@ bool Colunas::Solve() {
         for (uint32_t i = 0; i < numConstrs; ++i) {
             dual[i] = allConstrs[i].get(GRB_DoubleAttr_Pi);
         }
-
-        for (uint32_t i = 0; i < numConstrs; ++i) {
-            this->m_model->remove(allConstrs[i]); // remove a constraint antigas
-        }
-
+        
         // resolve o subproblem
         SubproblemResult result = this->SolveSubproblemPD(dual);
         
-        // se não for valido sai do loop
+        // se nao for valido sai do loop
         if(result.cost >= 0.0) {
             break;
         }
 
         // adiciona a nova coluna no modelo
-        this->variables.push_back(this->m_model->addVar(0.0, 1.0, 0.0, GRB_CONTINUOUS));
-        GRBVar& var = this->variables.back();
-
+        GRBColumn column;
         for(uint32_t i = 0; i < size; i++) {
-            if(result.results[i] >= 1e-6) {
-                this->expressions[i] += var;
+            if(result.results[i] >= 1e-6) {                    
+                column.addTerm(1.0, this->expressions[i]);
             }
         }
+
+        this->variables.push_back(this->m_model->addVar(0.0, 1.0, 0.0, GRB_CONTINUOUS, column, NULL));
     }
 
     this->m_solved = true;
@@ -68,9 +65,6 @@ bool Colunas::Solve() {
 }
 
 void Colunas::SolveProblem() {    
-    for(uint32_t i = 0; i < this->expressions.size(); i++) {
-        this->m_model->addConstr(this->expressions[i] == 1);
-    }
 
     GRBLinExpr objective = 0;
     for(uint32_t i = 0; i < this->variables.size(); i++) {
